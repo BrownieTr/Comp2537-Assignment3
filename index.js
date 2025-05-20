@@ -13,33 +13,34 @@ let totalPairs = 0;
 let timer;
 
 async function fetchPokemon() {
-    const response = await fetch("https://pokeapi.co/api/v2/pokemon?limit=100");
-    const data = await response.json();
-    const pokemonList = data.results.map(pokemon => pokemon.url);
-
     let selectedPokemon = [];
-    let selectedNames = new Set();
+    let selectedIds = new Set();
 
     while (selectedPokemon.length < totalPairs) {
-        const randomIndex = Math.floor(Math.random() * pokemonList.length);
-        const url = pokemonList[randomIndex];
+        const randomId = Math.floor(Math.random() * 898) + 1; // National Dex goes up to 898+
 
-        // Avoid duplicates in pairs selection
-        if(selectedNames.has(url)) continue;
+        if (selectedIds.has(randomId)) continue;
 
-        const pokemonData = await fetch(url);
-        const pokemonInfo = await pokemonData.json();
+        try {
+            const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
+            const pokemonInfo = await response.json();
 
-        if (!pokemonInfo.sprites.other["official-artwork"].front_default) continue;
+            const image = pokemonInfo.sprites.other["official-artwork"].front_default;
+            if (!image) continue;
 
-        selectedPokemon.push({
-            name: pokemonInfo.name,
-            image: pokemonInfo.sprites.other["official-artwork"].front_default
-        });
-        selectedNames.add(url);
+            selectedPokemon.push({
+                name: pokemonInfo.name,
+                image: image
+            });
+
+            selectedIds.add(randomId);
+        } catch (error) {
+            console.error(`Failed to fetch Pokémon ID ${randomId}`, error);
+        }
     }
     return selectedPokemon;
 }
+
 
 async function setupGame() {
     clearInterval(timer);
@@ -72,8 +73,6 @@ async function setupGame() {
         card.addEventListener("click", () => handleCardClick(card));
         gameBoard.appendChild(card);
     });
-
-    updateStatus();
 }
 
 function handleCardClick(card) {
@@ -103,11 +102,6 @@ function checkMatch() {
 
     flippedCards = [];
     moves++;
-    updateStatus();
-}
-
-function updateStatus() {
-    statusHeader.innerHTML = `Moves: ${moves} | Matches: ${matchedPairs}/${totalPairs}`;
 }
 
 function startTimer() {
@@ -115,7 +109,7 @@ function startTimer() {
     clearInterval(timer);
     timer = setInterval(() => {
         timeLeft--;
-        statusHeader.innerHTML = `Time Left: ${timeLeft}s | Moves: ${moves} | Matches: ${matchedPairs}/${totalPairs}`;
+        statusHeader.innerHTML = `Time Left: ${timeLeft}s | Moves: ${moves} | Matches: ${matchedPairs}/${totalPairs} | Pairs Left: ${totalPairs - matchedPairs}`;
         if (timeLeft <= 0) {
             endGame(false);
         }
@@ -124,8 +118,13 @@ function startTimer() {
 
 function endGame(won) {
     clearInterval(timer);
-    statusHeader.innerHTML = won ? "You Win! 🎉" : "Game Over 😞";
     document.querySelectorAll(".card").forEach(card => card.classList.add("disabled"));
+
+    const popup = document.getElementById("popup");
+    const popupMessage = document.getElementById("popup-message");
+
+    popupMessage.textContent = won ? "You Win! 🎉" : "Game Over 😞";
+    popup.classList.remove("hidden");
 }
 
 function activatePowerUp() {
@@ -140,11 +139,19 @@ function activatePowerUp() {
 startButton.addEventListener("click", () => {
     setupGame().then(() => startTimer());
 });
+
 resetButton.addEventListener("click", () => {
     clearInterval(timer);
-    setupGame();
+    setupGame().then(() => startTimer());
 });
+
 themeToggle.addEventListener("click", () => {
     document.body.classList.toggle("dark-theme");
 });
+
 powerUpButton.addEventListener("click", activatePowerUp);
+
+document.getElementById("popup-close").addEventListener("click", () => {
+    document.getElementById("popup").classList.add("hidden");
+    setupGame().then(() => startTimer());
+});
